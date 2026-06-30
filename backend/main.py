@@ -478,7 +478,11 @@ async def audit_single(
             try:
                 dataset = await ckan.package_show(dataset_id)
             except Exception as exc:
-                raise HTTPException(502, f"Could not fetch dataset from CKAN: {exc}")
+                logger.exception("Failed to fetch dataset %s from CKAN", dataset_id)
+                raise HTTPException(
+                    502,
+                    f"Could not fetch dataset from CKAN: {type(exc).__name__}: {exc}",
+                )
 
         try:
             report, org_id, org_name = await _audit_dataset(dataset, http)

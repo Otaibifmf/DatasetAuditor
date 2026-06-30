@@ -68,7 +68,9 @@ class CKANClient:
                                               return_exceptions=True)
 
         if isinstance(info, Exception):
-            raise ValueError(f"Could not fetch dataset {dataset_id}: {info}")
+            raise ValueError(
+                f"Could not fetch dataset {dataset_id}: {type(info).__name__}: {info}"
+            )
 
         resources = []
         if not isinstance(res_data, Exception):
