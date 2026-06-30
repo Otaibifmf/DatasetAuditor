@@ -1,2 +1,5 @@
 .DS_Store
 dataauditor.md
+DATA_GOV_SA_ACCESS_ISSUE.md
+__pycache__/
+*.pyc
