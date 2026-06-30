@@ -16,5 +16,3 @@ services:
         fromDatabase:
           name: datasetauditor-db
           property: connectionString
-      - key: CKAN_API_KEY
-        sync: false
