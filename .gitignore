@@ -18,3 +18,4 @@ frontend/.env.local
 
 node_modules/
 frontend/dist/
+HOSTING_PLAN_AUDITOR.md
