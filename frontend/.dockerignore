@@ -1,0 +1,13 @@
+# Keep the build context minimal. node_modules alone is ~81 MB and is
+# reinstalled inside the image anyway, so copying it is pure waste.
+
+node_modules/
+dist/
+
+# Secrets — must never reach an image layer. Note Vite inlines VITE_* values
+# at build time, so a stray .env here would end up in the shipped bundle.
+.env
+.env.*
+
+.DS_Store
+npm-debug.log*

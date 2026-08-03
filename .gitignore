@@ -1,5 +1,20 @@
 .DS_Store
-dataauditor.md
-DATA_GOV_SA_ACCESS_ISSUE.md
 __pycache__/
 *.pyc
+DATA_GOV_SA_FIX.md
+
+# Local-only internal references (for Claude/dev context — not published)
+DataSetAuditorProject.md
+backend/DataSetAuditorBackend.md
+frontend/DataSetAuditorFrontend.md
+relay/DataSetAuditorRelay.md
+
+# Local environment — never commit real values.
+.env
+.env.local
+*.env
+frontend/.env
+frontend/.env.local
+
+node_modules/
+frontend/dist/

@@ -1,18 +1,23 @@
+# Portable local/self-host stack. No provider-specific config lives here —
+# every setting is an env var with a working default (env vars or a local .env
+# file override them), so the same compose file runs on a laptop or on any box
+# that has Docker. The full variable reference is in backend/config.py.
+
 services:
 
   db:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: datachecker
-      POSTGRES_PASSWORD: datachecker
-      POSTGRES_DB: datachecker
+      POSTGRES_USER: ${POSTGRES_USER:-datachecker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-datachecker}
+      POSTGRES_DB: ${POSTGRES_DB:-datachecker}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "5432:5432"
+      - "${DB_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U datachecker"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-datachecker}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -26,12 +31,20 @@ services:
       db:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql+asyncpg://datachecker:datachecker@db:5432/datachecker
-      CKAN_API_KEY: ${CKAN_API_KEY:-}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+asyncpg://datachecker:datachecker@db:5432/datachecker}
+      PORTAL_BASE_URL: ${PORTAL_BASE_URL:-https://open.data.gov.sa}
+      RELAY_KEY: ${RELAY_KEY:-}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      ENABLE_BULK_ENDPOINTS: ${ENABLE_BULK_ENDPOINTS:-false}
+      HTTP_TIMEOUT: ${HTTP_TIMEOUT:-30}
     ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
 
   frontend:
     build:
@@ -39,7 +52,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
     depends_on:
       - backend
 

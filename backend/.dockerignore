@@ -1,0 +1,15 @@
+# Keep the build context minimal and never bake local files into the image.
+# The Dockerfile ends with `COPY . .`, so anything not excluded here ships.
+
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Secrets — must never reach an image layer.
+.env
+.env.*
+
+.venv/
+venv/
+.DS_Store
+.pytest_cache/
