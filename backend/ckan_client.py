@@ -11,10 +11,14 @@ import logging
 from typing import Optional
 import httpx
 
+from config import HTTP_TIMEOUT, PORTAL_API_BASE, RELAY_KEY
+
 logger = logging.getLogger(__name__)
 
-PORTAL_BASE = "https://open.data.gov.sa/data/api"
-TIMEOUT = 30.0
+# Resolved in config.py — points at the portal directly, or at a Saudi-IP relay
+# that mirrors the same /data/api/ path layout.
+PORTAL_BASE = PORTAL_API_BASE
+TIMEOUT = HTTP_TIMEOUT
 
 BROWSER_HEADERS = {
     "User-Agent": (
@@ -34,12 +38,15 @@ class CKANClient:
     """
 
     def __init__(self, base_url: str = PORTAL_BASE):
-        # base_url param kept for interface compatibility with main.py
+        self._base_url = base_url
         self._client: Optional[httpx.AsyncClient] = None
 
     async def __aenter__(self):
+        headers = dict(BROWSER_HEADERS)
+        if RELAY_KEY:
+            headers["x-relay-key"] = RELAY_KEY
         self._client = httpx.AsyncClient(
-            headers=BROWSER_HEADERS,
+            headers=headers,
             timeout=TIMEOUT,
             follow_redirects=True,
         )
@@ -52,7 +59,7 @@ class CKANClient:
     # ── Core fetch ────────────────────────────────────────────────────────────
 
     async def _get_json(self, path: str, **params) -> dict:
-        url = f"{PORTAL_BASE}{path}"
+        url = f"{self._base_url}{path}"
         resp = await self._client.get(url, params={"version": -1, **params})
         resp.raise_for_status()
         return resp.json()

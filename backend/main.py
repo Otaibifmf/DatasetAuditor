@@ -4,7 +4,6 @@ DataChecker FastAPI backend — Saudi Open Data Quality Auditor
 
 from __future__ import annotations
 import asyncio
-import json
 import logging
 import re
 from contextlib import asynccontextmanager
@@ -14,11 +13,14 @@ from typing import Optional
 import httpx
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func, desc, cast, Date
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+import config
+import database
 from database import get_db, init_db, AsyncSessionLocal
 from models import AuditResult
 from ckan_client import CKANClient
@@ -41,13 +43,15 @@ from report import generate_pdf_report
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-CKAN_BASE = "https://open.data.gov.sa/data/api"
+CKAN_BASE = config.PORTAL_API_BASE
 
 _VALID_ID_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_\-]{2,149}$')
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # init_db never raises — a dead database degrades the app to 503s on
+    # DB-backed routes rather than preventing it from starting at all.
     await init_db()
     yield
 
@@ -61,10 +65,35 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=config.CORS_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def _db_error_handler(request, exc: SQLAlchemyError):
+    """Turn database outages into an explicit 503 instead of a hang or a 500."""
+    logger.error("Database error on %s: %s: %s", request.url.path, type(exc).__name__, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "Database unavailable. Check DATABASE_URL and that the database is reachable."},
+    )
+
+
+@app.exception_handler(OSError)
+async def _socket_error_handler(request, exc: OSError):
+    """
+    Socket-level failures (DNS resolution, refused connections) can escape
+    SQLAlchemy unwrapped — a stopped database container yields a bare
+    socket.gaierror, which would otherwise surface as an opaque 500.
+    """
+    logger.error("Connectivity error on %s: %s: %s", request.url.path, type(exc).__name__, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": f"A required service is unreachable ({type(exc).__name__}). "
+                           "Check the database and upstream portal connectivity."},
+    )
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -72,9 +101,22 @@ app.add_middleware(
 def _http_client() -> httpx.AsyncClient:
     return httpx.AsyncClient(
         headers={"User-Agent": "DataChecker/1.0"},
-        timeout=30.0,
+        timeout=config.HTTP_TIMEOUT,
         follow_redirects=True,
     )
+
+
+def _require_bulk_enabled():
+    """
+    Guard for endpoints that fan out into many upstream requests. Off unless
+    ENABLE_BULK_ENDPOINTS is set, so a public deployment can't be used to
+    hammer the portal (or the relay) through this API.
+    """
+    if not config.ENABLE_BULK_ENDPOINTS:
+        raise HTTPException(
+            403,
+            "Bulk endpoints are disabled. Set ENABLE_BULK_ENDPOINTS=true to enable them.",
+        )
 
 
 _AUDIT_DEFAULTS = [
@@ -419,7 +461,8 @@ async def audit_raw(
     return {"message": "Audit complete", "report": report.to_dict()}
 
 
-@app.post("/api/audit/bulk", summary="Audit multiple datasets (background job)")
+@app.post("/api/audit/bulk", summary="Audit multiple datasets (background job)",
+          dependencies=[Depends(_require_bulk_enabled)])
 async def audit_bulk(
     background_tasks: BackgroundTasks,
     limit: int = Query(50, ge=1, le=500),
@@ -433,7 +476,8 @@ class SeedPayload(BaseModel):
     urls: list[str]
 
 
-@app.post("/api/audit/seed", summary="Audit a list of dataset URLs/IDs in bulk")
+@app.post("/api/audit/seed", summary="Audit a list of dataset URLs/IDs in bulk",
+          dependencies=[Depends(_require_bulk_enabled)])
 async def audit_seed(
     payload: SeedPayload,
     background_tasks: BackgroundTasks,
@@ -572,25 +616,17 @@ async def trends(db: AsyncSession = Depends(get_db)):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
-
-
-@app.get("/api/debug/next-data", summary="Inspect __NEXT_DATA__ for a portal URL")
-async def debug_next_data(url: str = Query(...)):
-    """Fetch a portal page and return the raw __NEXT_DATA__ JSON for debugging."""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "text/html,application/xhtml+xml",
-        "Accept-Language": "en-US,en;q=0.9",
+    """
+    Liveness probe. Deliberately does not touch the database — it must answer
+    even when the database is down, so an outage is diagnosable from outside.
+    """
+    return {
+        "status": "ok",
+        # Probed live (bounded), not cached from startup — a status that goes
+        # stale during an outage is worse than no status at all.
+        "database": "connected" if await database.check_db() else "unavailable",
+        "database_at_startup": "connected" if database.db_ready else "unavailable",
+        "portal_base_url": config.PORTAL_BASE_URL,
+        "relay_configured": bool(config.RELAY_KEY),
+        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
-    async with httpx.AsyncClient(headers=headers, follow_redirects=True, timeout=25.0) as client:
-        await client.get("https://open.data.gov.sa/", timeout=15.0)
-        resp = await client.get(url, timeout=25.0)
-    m = re.search(r'<script id="__NEXT_DATA__"[^>]*>(.*?)</script>', resp.text, re.DOTALL)
-    if not m:
-        return {"error": "No __NEXT_DATA__ found", "status_code": resp.status_code, "html_snippet": resp.text[:500]}
-    try:
-        data = json.loads(m.group(1))
-    except Exception as e:
-        return {"error": str(e), "raw": m.group(1)[:2000]}
-    return data

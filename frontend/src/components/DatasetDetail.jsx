@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
-import { getDatasetDetail, getDatasetHistory, auditDataset, getPdfUrl } from '../api'
+import { getDatasetDetail, getDatasetHistory, auditDataset, getPdfUrl, errorMessage } from '../api'
 import { GradeBadge, ScoreNumber, ScoreRing, DimensionScores, AbandonmentBadge, TopicBadge, scoreColor } from './ScoreCard'
 
 const CLUSTER_LABELS = {
@@ -78,7 +78,7 @@ export default function DatasetDetail() {
       setDetail(d.data)
       setHistory(h.data)
     } catch (err) {
-      setError(err.response?.data?.detail || 'Failed to load dataset')
+      setError(errorMessage(err, 'Failed to load dataset'))
     } finally {
       setLoading(false)
     }
@@ -92,7 +92,7 @@ export default function DatasetDetail() {
       await auditDataset(id)
       await load()
     } catch (err) {
-      setError(err.response?.data?.detail || 'Re-audit failed')
+      setError(errorMessage(err, 'Re-audit failed'))
     } finally {
       setReauditing(false)
     }

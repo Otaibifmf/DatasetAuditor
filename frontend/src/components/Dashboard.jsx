@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { auditByUrl, auditSeed } from '../api'
+import { auditByUrl, auditSeed, errorMessage } from '../api'
 import {
   GradeBadge, ScoreRing, ScoreBar, AbandonmentBadge, TopicBadge, scoreColor, GRADE_STYLES,
 } from './ScoreCard'
@@ -132,7 +132,7 @@ export default function Dashboard() {
       setResult(r.data.report)
       setAuditId('')
     } catch (err) {
-      setFlash({ type: 'error', msg: err.response?.data?.detail || 'Audit failed' })
+      setFlash({ type: 'error', msg: errorMessage(err, 'Audit failed') })
     } finally {
       setAuditLoading(false)
     }
@@ -152,7 +152,7 @@ export default function Dashboard() {
       clearTimeout(runTimer.current)
       runTimer.current = setTimeout(() => setRunning(false), 30000)
     } catch (err) {
-      setFlash({ type: 'error', msg: err.response?.data?.detail || 'Seed failed' })
+      setFlash({ type: 'error', msg: errorMessage(err, 'Seed failed') })
     } finally {
       setSeedLoading(false)
     }
