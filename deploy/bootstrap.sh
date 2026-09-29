@@ -94,9 +94,10 @@ cd "$APP_DIR"
 # ── Environment ───────────────────────────────────────────────────────────────
 # Two things matter here and both are security-relevant:
 #
-#  1. The compose file publishes every port as "${VAR:-default}:internal". The
-#     left side is a full bind spec, so setting DB_PORT=127.0.0.1:5432 binds to
-#     loopback instead of 0.0.0.0. This is NOT cosmetic: Docker writes its own
+#  1. The compose file publishes the backend/frontend as "${VAR:-default}:internal".
+#     The left side is a full bind spec, so BACKEND_PORT=127.0.0.1:8000 binds to
+#     loopback instead of 0.0.0.0. (The DB is already pinned to 127.0.0.1 in the
+#     compose file, so DB_PORT is a bare port.) This is NOT cosmetic: Docker writes its own
 #     iptables DNAT rules that bypass ufw entirely, so a 0.0.0.0 publish is
 #     reachable from the internet even with the firewall "closed". Only Caddy
 #     should face outward.
@@ -116,7 +117,7 @@ POSTGRES_DB=datachecker
 DATABASE_URL=postgresql+asyncpg://datachecker:${DB_PASS}@db:5432/datachecker
 
 # Loopback-only. Caddy is the only thing bound to a public interface.
-DB_PORT=127.0.0.1:5432
+DB_PORT=5432
 BACKEND_PORT=127.0.0.1:8000
 FRONTEND_PORT=127.0.0.1:3000
 
