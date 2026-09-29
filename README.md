@@ -39,8 +39,10 @@ docker compose up --build
 - API docs: http://localhost:8000/docs
 - Health: http://localhost:8000/health
 
-No `.env` is required — every setting has a working default. Stop with `docker compose down`
-(add `-v` to also delete the database volume).
+No `.env` is required locally — every setting has a working default. On any shared or public
+machine, `cp .env.example .env` and set a real `POSTGRES_PASSWORD` first. Postgres is only
+published on `127.0.0.1`. Stop with `docker compose down` (add `-v` to also delete the database
+volume).
 
 ### Option B — Local Development
 
@@ -81,7 +83,7 @@ and it's gitignored). Key values:
 |----------|---------|---------|
 | `DATABASE_URL` | local compose Postgres | Accepts `postgres://`, `postgresql://` or `postgresql+asyncpg://` |
 | `PORTAL_BASE_URL` | `https://open.data.gov.sa` | Point at a Saudi-IP relay when hosting outside KSA |
-| `RELAY_KEY` | *(empty)* | Shared secret sent as `x-relay-key`; must match the relay |
+| `RELAY_KEY` | *(empty)* | Shared secret sent as `x-relay-key`; must match the relay (required on the relay itself) |
 | `CORS_ORIGINS` | `*` | Comma-separated allowed origins |
 | `ENABLE_BULK_ENDPOINTS` | `false` | Gates the fan-out audit endpoints |
 | `DB_CONNECT_TIMEOUT` | `10` | Fail fast instead of hanging on a dead database |

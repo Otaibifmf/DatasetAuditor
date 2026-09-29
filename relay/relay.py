@@ -11,13 +11,18 @@ The portal's WAF applies two independent checks and BOTH must pass:
      set below returns real JSON.
 """
 
+import hmac
 import os
 import httpx
 from fastapi import FastAPI, Request, Response, HTTPException
 
 PORTAL_BASE = "https://open.data.gov.sa"
 ALLOWED_PREFIX = "/data/api/"               # only forward the portal's data API, nothing else
-RELAY_KEY = os.getenv("RELAY_KEY", "")      # optional shared secret; set the same value on the backend
+RELAY_KEY = (os.getenv("RELAY_KEY") or "").strip()  # shared secret; set the same value on the backend
+
+# Required: without a key this would be an open proxy onto a Saudi IP.
+if len(RELAY_KEY) < 16:
+    raise RuntimeError("RELAY_KEY must be set to a random string of at least 16 characters")
 
 # Must stay in sync with backend/ckan_client.py — the WAF rejects anything less.
 BROWSER_HEADERS = {
@@ -40,8 +45,8 @@ def healthz():
 
 @app.get("/{path:path}")
 async def relay(path: str, request: Request):
-    # Optional auth so this can't be used as an open proxy by strangers.
-    if RELAY_KEY and request.headers.get("x-relay-key") != RELAY_KEY:
+    # Auth so this can't be used as an open proxy by strangers.
+    if not hmac.compare_digest(request.headers.get("x-relay-key", ""), RELAY_KEY):
         raise HTTPException(status_code=401, detail="bad relay key")
 
     full_path = "/" + path

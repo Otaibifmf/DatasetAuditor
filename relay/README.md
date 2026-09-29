@@ -23,6 +23,10 @@ docker run -d --restart unless-stopped -p 8080:8080 \
   --name portal-relay portal-relay
 ```
 
+`RELAY_KEY` is required (at least 16 characters) — the relay refuses to start without it,
+so it can never run as an open proxy. Generate one with `openssl rand -hex 32` and set the
+same value as `RELAY_KEY` on the backend.
+
 Put HTTPS in front of it (e.g. Caddy with automatic Let's Encrypt):
 
 ```
